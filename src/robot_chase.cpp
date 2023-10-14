@@ -11,10 +11,10 @@
 class RickAndMortyController : public rclcpp::Node {
 public:
   RickAndMortyController()
-      : Node("rick_and_morty_controller"), error_distance_(0.0),
+      : Node("rick_and_morty_controller"), error_distance_(1.0),
         error_yaw_(0.0),
-        kp_distance_(0.5), // Ajusta este valor según tus necesidades
-        kp_yaw_(0.2)       // Ajusta este valor según tus necesidades
+        kp_distance_(0.2), // Ajusta este valor según tus necesidades
+        kp_yaw_(0.1)       // Ajusta este valor según tus necesidades
   {
     // Inicializa el buffer y el oyente TF2
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -51,6 +51,8 @@ private:
     double dx = transform.transform.translation.x;
     double dy = transform.transform.translation.y;
     error_distance_ = sqrt(dx * dx + dy * dy);
+    RCLCPP_INFO(get_logger(), "Distancia: %f m", error_distance_);
+
 
     // Convierte la rotación de geometry_msgs::msg::Quaternion a tf2::Quaternion
     tf2::Quaternion rotation(
@@ -59,14 +61,23 @@ private:
 
     // Calcula el yaw angle
     double yaw = rotation.getAngle();
+    RCLCPP_INFO(get_logger(), "Yaw: %f", yaw);
 
     // Calcula la velocidad lineal y angular
     double linear_velocity = kp_distance_ * error_distance_;
+    RCLCPP_INFO(get_logger(), "Linear Velocity: %f m", linear_velocity);
     double angular_velocity = kp_yaw_ * yaw;
+    RCLCPP_INFO(get_logger(), "Angular Velocity: %f m", angular_velocity);
 
     // Crea y publica el mensaje Twist
     auto twist_msg = std::make_unique<geometry_msgs::msg::Twist>();
-    twist_msg->linear.x = linear_velocity;
+    if (linear_velocity < 0.5){
+        twist_msg->linear.x = linear_velocity;
+    }
+    else {
+        twist_msg->linear.x = 0.15;
+        RCLCPP_INFO(get_logger(), "Reducing Velocity To 0.1 For Security");
+    }
     twist_msg->angular.z = angular_velocity;
     publisher_->publish(std::move(twist_msg));
   }
