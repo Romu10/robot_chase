@@ -14,7 +14,7 @@ public:
       : Node("rick_and_morty_controller"), error_distance_(1.0),
         error_yaw_(0.0),
         kp_distance_(0.2), // Ajusta este valor según tus necesidades
-        kp_yaw_(0.1)       // Ajusta este valor según tus necesidades
+        kp_yaw_(0.2)       // Ajusta este valor según tus necesidades
   {
     // Inicializa el buffer y el oyente TF2
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -60,25 +60,39 @@ private:
         transform.transform.rotation.y, transform.transform.rotation.z);
 
     // Calcula el yaw angle
-    double yaw = rotation.getAngle();
+    //double yaw = rotation.getAngle();
+    //RCLCPP_INFO(get_logger(), "Yaw: %f", yaw);
+
+    // Calcula el error angular
+    double q_x = transform.transform.rotation.x;
+    double q_y = transform.transform.rotation.y;
+    double q_z = transform.transform.rotation.z;
+    double q_w = transform.transform.rotation.w;
+
+    double yaw = atan2(2.0 * (q_x * q_y + q_w * q_z), q_w * q_w + q_x * q_x - q_y * q_y - q_z * q_z);
+
+    error_yaw_ = desired_yaw_ - yaw;
     RCLCPP_INFO(get_logger(), "Yaw: %f", yaw);
 
     // Calcula la velocidad lineal y angular
     double linear_velocity = kp_distance_ * error_distance_;
     RCLCPP_INFO(get_logger(), "Linear Velocity: %f m", linear_velocity);
-    double angular_velocity = kp_yaw_ * yaw;
+    double angular_velocity = kp_yaw_ * error_yaw_;
     RCLCPP_INFO(get_logger(), "Angular Velocity: %f m", angular_velocity);
 
     // Crea y publica el mensaje Twist
     auto twist_msg = std::make_unique<geometry_msgs::msg::Twist>();
-    if (linear_velocity < 0.5){
-        twist_msg->linear.x = linear_velocity;
+    if (error_distance_ < 1.0){
+        twist_msg->linear.x = 0.00;
+        twist_msg->angular.z = 0.00;
+        RCLCPP_INFO(get_logger(), "Morty is Chased");
     }
     else {
-        twist_msg->linear.x = 0.15;
-        RCLCPP_INFO(get_logger(), "Reducing Velocity To 0.1 For Security");
+        twist_msg->linear.x = linear_velocity;
+        twist_msg->angular.z = angular_velocity;
+        RCLCPP_INFO(get_logger(), "Chasing Morty");
     }
-    twist_msg->angular.z = angular_velocity;
+    
     publisher_->publish(std::move(twist_msg));
   }
 
@@ -90,6 +104,7 @@ private:
   double error_yaw_;
   double kp_distance_;
   double kp_yaw_;
+  double desired_yaw_ = 0.00;
 };
 
 int main(int argc, char *argv[]) {
